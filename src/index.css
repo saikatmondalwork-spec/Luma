@@ -1,0 +1,121 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    /* Exact reference palette: cool periwinkle backdrop, pure white surfaces, royal violet & coral-pink */
+    --luma-backdrop: #C8D1E6;
+    --luma-canvas: #F5F7FC;
+    --luma-surface: #FFFFFF;
+    --luma-subtle: #EFF2F9;
+    --luma-border: #E5E9F4;
+    --luma-text: #1E1B39;
+    --luma-muted: #7C7D9B;
+
+    --luma-plum: #6554C4;
+    --luma-plum-deep: #5443B3;
+    --luma-plum-soft: #EFEBFD;
+    --luma-rose: #FF7194;
+    --luma-rose-deep: #F2557D;
+    --luma-rose-soft: #FFEAF0;
+    --luma-lavender: #8474DC;
+    --luma-sage: #22C55E;
+    --luma-peach: #FF9472;
+  }
+
+  .dark {
+    --luma-backdrop: #0C0B14;
+    --luma-canvas: #131221;
+    --luma-surface: #1B1A2E;
+    --luma-subtle: #25233D;
+    --luma-border: #2F2D4A;
+    --luma-text: #F4F3FA;
+    --luma-muted: #A1A0C0;
+
+    --luma-plum: #7E6EE0;
+    --luma-plum-deep: #6655C4;
+    --luma-plum-soft: #292547;
+    --luma-rose: #FF7A9C;
+    --luma-rose-deep: #F25C84;
+    --luma-rose-soft: #3B202D;
+    --luma-lavender: #9D90EC;
+    --luma-sage: #34D399;
+    --luma-peach: #FFA080;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--luma-canvas);
+    color: var(--luma-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .dark html,
+  html.dark body {
+    letter-spacing: 0.005em;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--luma-canvas);
+    color: var(--luma-text);
+    overflow-x: hidden;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--luma-plum);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.luma-card {
+  background-color: var(--luma-surface);
+  border: 1px solid var(--luma-border);
+  box-shadow: 0 10px 30px -10px rgba(74, 59, 158, 0.08);
+}
+
+.dark .luma-card {
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.45);
+}
+
+.luma-violet-gradient {
+  background: linear-gradient(145deg, #6E5DD3 0%, #5B49BE 55%, #4E3DAE 100%);
+}
+
+.luma-pink-gradient {
+  background: linear-gradient(155deg, #FF8AA7 0%, #FF7194 55%, #F2557D 100%);
+}

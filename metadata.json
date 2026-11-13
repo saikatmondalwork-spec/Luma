@@ -1,0 +1,6 @@
+{
+  "name": "Luma",
+  "description": "Private, local-first menstrual cycle, symptom, mood, and health journal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
