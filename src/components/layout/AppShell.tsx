@@ -4,17 +4,26 @@ import {
   Bell,
   BookOpen,
   CalendarDays,
+  Check,
+  Copy,
+  Database,
   Home,
   Lock,
+  LogIn,
+  LogOut,
   Moon,
   Plus,
+  RefreshCw,
   Search,
   Settings,
   Sun,
+  User,
   X,
 } from 'lucide-react';
 import { NavTab } from '@/src/types/luma';
+import { useAuth } from '@/src/context/AuthContext';
 import { useLuma } from '@/src/context/LumaContext';
+import { SUPABASE_SCHEMA_SQL } from '@/src/lib/supabaseSchema';
 import { LumaMark } from '@/src/components/common/LumaMark';
 import {
   OfflineIndicator,
@@ -56,6 +65,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   onGlobalSearch,
   children,
 }) => {
+  const { user, signOut, exitGuestMode } = useAuth();
   const {
     resolvedTheme,
     updateSettings,
@@ -64,11 +74,33 @@ export const AppShell: React.FC<AppShellProps> = ({
     corruptionWarning,
     dismissCorruptionWarning,
     storageError,
+    cloudSyncStatus,
+    retryCloudSync,
     dueReminders,
     dismissReminder,
   } = useLuma();
 
   const [searchDraft, setSearchDraft] = useState('');
+  const [sqlCopied, setSqlCopied] = useState(false);
+
+  const handleCopySql = async () => {
+    try {
+      await navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL);
+      setSqlCopied(true);
+      window.setTimeout(() => setSqlCopied(false), 2500);
+    } catch {
+      setSqlCopied(false);
+    }
+  };
+
+  const userInitial = user?.email?.charAt(0).toUpperCase() ?? null;
+  const handleAuthAction = () => {
+    if (user) {
+      void signOut();
+    } else {
+      exitGuestMode();
+    }
+  };
 
   const toggleTheme = () => {
     void updateSettings({
@@ -158,6 +190,19 @@ export const AppShell: React.FC<AppShellProps> = ({
                 <Lock className="w-5 h-5" />
               </button>
             )}
+            <button
+              type="button"
+              onClick={handleAuthAction}
+              aria-label={user ? 'Sign out' : 'Sign in'}
+              title={user ? `Sign out (${user.email})` : 'Sign in with account'}
+              className="w-11 h-11 rounded-2xl text-white/80 hover:text-white hover:bg-white/14 flex items-center justify-center transition-colors"
+            >
+              {user ? (
+                <LogOut className="w-5 h-5" />
+              ) : (
+                <LogIn className="w-5 h-5" />
+              )}
+            </button>
           </div>
         </aside>
 
@@ -193,6 +238,19 @@ export const AppShell: React.FC<AppShellProps> = ({
                 <Sun className="w-4 h-4" />
               ) : (
                 <Moon className="w-4 h-4" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleAuthAction}
+              aria-label={user ? 'Sign out' : 'Sign in'}
+              title={user ? `Sign out (${user.email})` : 'Sign in'}
+              className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl text-[var(--luma-muted)] hover:text-[var(--luma-text)]"
+            >
+              {user ? (
+                <LogOut className="w-4 h-4" />
+              ) : (
+                <LogIn className="w-4 h-4" />
               )}
             </button>
             <button
@@ -243,6 +301,24 @@ export const AppShell: React.FC<AppShellProps> = ({
                 <Plus className="w-4 h-4" />
                 <span>Check-in</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectTab('settings')}
+                aria-label={
+                  user?.email
+                    ? `Account settings (${user.email})`
+                    : 'Local guest account settings'
+                }
+                title={user?.email ?? 'Local Guest Mode — Open Settings'}
+                className="w-10 h-10 rounded-full luma-plum-soft bg-[var(--luma-plum-soft)] text-[var(--luma-plum)] border border-[var(--luma-border)] flex items-center justify-center text-sm font-bold hover:opacity-90 transition-opacity shrink-0"
+              >
+                {userInitial ? (
+                  <span>{userInitial}</span>
+                ) : (
+                  <User className="w-4 h-4" />
+                )}
+              </button>
             </div>
           </div>
 
@@ -256,6 +332,51 @@ export const AppShell: React.FC<AppShellProps> = ({
                 className="mb-4 rounded-2xl border border-[#F3B5C5] bg-[var(--luma-rose-soft)] px-4 py-3 text-sm text-[#B82851] dark:text-[#FFA6BE]"
               >
                 {storageError}
+              </div>
+            )}
+
+            {user && cloudSyncStatus === 'tables-missing' && (
+              <div
+                role="status"
+                className="mb-4 rounded-2xl border border-[var(--luma-border)] bg-[var(--luma-subtle)] px-4 py-3.5 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <Database className="w-4 h-4 text-[var(--luma-plum)] shrink-0 mt-0.5" />
+                  <div className="text-xs sm:text-sm text-[var(--luma-text)] leading-relaxed">
+                    <span className="font-semibold">
+                      Create Supabase tables to enable cloud sync:
+                    </span>{' '}
+                    Run the SQL setup script in your Supabase SQL Editor, then click
+                    Retry Sync. Until then, your data is saved locally on this device.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => void handleCopySql()}
+                    className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[var(--luma-surface)] border border-[var(--luma-border)] text-xs font-semibold text-[var(--luma-text)] inline-flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    {sqlCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-[#16A34A]" />
+                        <span>SQL Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-[var(--luma-plum)]" />
+                        <span>Copy SQL</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void retryCloudSync()}
+                    className="min-h-[36px] px-3 py-1.5 rounded-xl luma-violet-gradient text-white text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Retry Sync</span>
+                  </button>
+                </div>
               </div>
             )}
 

@@ -19,13 +19,17 @@ import {
   encryptSnapshotWithPassphrase,
 } from '@/src/services/cryptoService';
 
-const DB_NAME = 'luma-health-db';
+const DB_PREFIX = 'luma-health-db';
 const DB_VERSION = 1;
 
 const STORE_SETTINGS = 'settings';
 const STORE_CYCLES = 'cycles';
 const STORE_LOGS = 'dailyLogs';
 const STORE_VAULT = 'vault';
+
+function getDatabaseName(scope = 'guest'): string {
+  return scope === 'guest' || !scope ? DB_PREFIX : `${DB_PREFIX}-${scope}`;
+}
 
 export interface ActiveVaultSession {
   key: CryptoKey;
@@ -40,14 +44,14 @@ export interface StorageLoadResult {
   corruptionWarning: string | null;
 }
 
-function openDatabase(): Promise<IDBDatabase> {
+function openDatabase(scope = 'guest'): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
       reject(new Error('IndexedDB is unavailable in this browser context.'));
       return;
     }
 
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open(getDatabaseName(scope), DB_VERSION);
 
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -144,8 +148,8 @@ function sanitizeRecords(raw: {
   };
 }
 
-export async function loadInitialStorage(): Promise<StorageLoadResult> {
-  const db = await openDatabase();
+export async function loadInitialStorage(scope = 'guest'): Promise<StorageLoadResult> {
+  const db = await openDatabase(scope);
   try {
     const vault = await getOneFromStore<EncryptedVaultRecord>(db, STORE_VAULT, 'vault');
     if (vault && vault.encrypted) {
@@ -240,9 +244,10 @@ async function writeEncryptedVaultOnly(
 
 export async function saveSnapshot(
   snapshot: LumaDataSnapshot,
-  vaultSession: ActiveVaultSession | null
+  vaultSession: ActiveVaultSession | null,
+  scope = 'guest'
 ): Promise<void> {
-  const db = await openDatabase();
+  const db = await openDatabase(scope);
   try {
     if (vaultSession) {
       const vaultRecord = await encryptSnapshotWithKey(
@@ -262,10 +267,11 @@ export async function saveSnapshot(
 
 export async function enableEncryptedVault(
   snapshot: LumaDataSnapshot,
-  passphrase: string
+  passphrase: string,
+  scope = 'guest'
 ): Promise<ActiveVaultSession> {
   const { record, key, salt } = await encryptSnapshotWithPassphrase(snapshot, passphrase);
-  const db = await openDatabase();
+  const db = await openDatabase(scope);
   try {
     await writeEncryptedVaultOnly(db, record);
     return { key, salt, iterations: record.iterations };
@@ -275,9 +281,10 @@ export async function enableEncryptedVault(
 }
 
 export async function unlockEncryptedVault(
-  passphrase: string
+  passphrase: string,
+  scope = 'guest'
 ): Promise<{ snapshot: LumaDataSnapshot; session: ActiveVaultSession; corruptionWarning: string | null }> {
-  const db = await openDatabase();
+  const db = await openDatabase(scope);
   try {
     const vault = await getOneFromStore<EncryptedVaultRecord>(db, STORE_VAULT, 'vault');
     if (!vault || !vault.encrypted) {
@@ -298,9 +305,12 @@ export async function unlockEncryptedVault(
   }
 }
 
-export async function disableEncryptedVault(passphrase: string): Promise<LumaDataSnapshot> {
-  const { snapshot } = await unlockEncryptedVault(passphrase);
-  const db = await openDatabase();
+export async function disableEncryptedVault(
+  passphrase: string,
+  scope = 'guest'
+): Promise<LumaDataSnapshot> {
+  const { snapshot } = await unlockEncryptedVault(passphrase, scope);
+  const db = await openDatabase(scope);
   try {
     await writePlaintextSnapshot(db, snapshot);
     return snapshot;
@@ -309,8 +319,8 @@ export async function disableEncryptedVault(passphrase: string): Promise<LumaDat
   }
 }
 
-export async function wipeAllLocalData(): Promise<void> {
-  const db = await openDatabase();
+export async function wipeAllLocalData(scope = 'guest'): Promise<void> {
+  const db = await openDatabase(scope);
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(

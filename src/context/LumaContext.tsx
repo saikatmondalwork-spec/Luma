@@ -21,6 +21,7 @@ import {
   hasAnyDailyLogContent,
   validatePeriodInput,
 } from '@/src/utils/validation';
+import { useAuth } from '@/src/context/AuthContext';
 import {
   ActiveVaultSession,
   disableEncryptedVault,
@@ -30,6 +31,13 @@ import {
   unlockEncryptedVault,
   wipeAllLocalData,
 } from '@/src/services/storageService';
+import {
+  CloudSyncStatus,
+  deleteUserCloudData,
+  ensureUserRecord,
+  fetchUserCloudSnapshot,
+  syncSnapshotToCloud,
+} from '@/src/services/supabaseSyncService';
 import {
   computeCycleSummary,
   generatePersonalizedObservations,
@@ -65,6 +73,8 @@ interface LumaContextValue {
   loading: boolean;
   storageError: string | null;
   corruptionWarning: string | null;
+  cloudSyncStatus: CloudSyncStatus;
+  cloudSyncError: string | null;
   vaultLocked: boolean;
   vaultEnabled: boolean;
   resolvedTheme: 'light' | 'dark';
@@ -109,6 +119,7 @@ interface LumaContextValue {
     mode: 'replace' | 'merge'
   ) => Promise<void>;
   deleteAllData: () => Promise<void>;
+  retryCloudSync: () => Promise<void>;
   dismissCorruptionWarning: () => void;
   dismissReminder: (id: string) => void;
 }
@@ -118,9 +129,14 @@ const LumaContext = createContext<LumaContextValue | null>(null);
 export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const { user, authLoading } = useAuth();
+  const storageScope = user?.id ?? 'guest';
+
   const [loading, setLoading] = useState(true);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [corruptionWarning, setCorruptionWarning] = useState<string | null>(null);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('local-only');
+  const [cloudSyncError, setCloudSyncError] = useState<string | null>(null);
   const [vaultLocked, setVaultLocked] = useState(false);
   const [vaultEnabled, setVaultEnabled] = useState(false);
   const vaultSessionRef = useRef<ActiveVaultSession | null>(null);
@@ -167,19 +183,113 @@ export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [resolvedTheme]);
 
-  // Initial IndexedDB load
+  // Load scoped IndexedDB & hydrate from Supabase when authenticated
   useEffect(() => {
+    if (authLoading) return;
     let active = true;
+
+    vaultSessionRef.current = null;
+    setLoading(true);
+    setStorageError(null);
+    setCorruptionWarning(null);
+    setCloudSyncError(null);
+    setCloudSyncStatus(user ? 'syncing' : 'local-only');
+
     (async () => {
       try {
-        const result = await loadInitialStorage();
+        const localResult = await loadInitialStorage(storageScope);
         if (!active) return;
-        setVaultLocked(result.locked);
-        setVaultEnabled(result.vaultExists);
-        setSettings(result.snapshot.settings);
-        setCycles(result.snapshot.cycles);
-        setDailyLogs(result.snapshot.dailyLogs);
-        setCorruptionWarning(result.corruptionWarning);
+
+        setVaultLocked(localResult.locked);
+        setVaultEnabled(localResult.vaultExists);
+        setSettings(localResult.snapshot.settings);
+        setCycles(localResult.snapshot.cycles);
+        setDailyLogs(localResult.snapshot.dailyLogs);
+        setCorruptionWarning(localResult.corruptionWarning);
+
+        if (!user) {
+          setCloudSyncStatus('local-only');
+          return;
+        }
+
+        if (localResult.locked) {
+          return;
+        }
+
+        const userCheck = await ensureUserRecord({
+          id: user.id,
+          email: user.email,
+        });
+        if (!active) return;
+        if (userCheck.status === 'tables-missing') {
+          setCloudSyncStatus('tables-missing');
+          setCloudSyncError(userCheck.error ?? null);
+          return;
+        }
+        if (userCheck.status === 'error') {
+          setCloudSyncStatus('error');
+          setCloudSyncError(userCheck.error ?? null);
+          return;
+        }
+
+        const cloudRes = await fetchUserCloudSnapshot(user.id);
+        if (!active) return;
+
+        if (cloudRes.status === 'tables-missing') {
+          setCloudSyncStatus('tables-missing');
+          setCloudSyncError(cloudRes.error ?? null);
+          return;
+        }
+        if (cloudRes.status === 'error') {
+          setCloudSyncStatus('error');
+          setCloudSyncError(cloudRes.error ?? null);
+          return;
+        }
+
+        if (cloudRes.status === 'ready' && cloudRes.snapshot) {
+          const localHasData =
+            localResult.snapshot.settings.onboardingCompleted ||
+            localResult.snapshot.cycles.length > 0 ||
+            localResult.snapshot.dailyLogs.length > 0;
+
+          const cloudIsNewerOrLocalEmpty =
+            !localHasData ||
+            cloudRes.snapshot.settings.updatedAt >=
+              localResult.snapshot.settings.updatedAt;
+
+          if (cloudIsNewerOrLocalEmpty) {
+            setSettings(cloudRes.snapshot.settings);
+            setCycles(cloudRes.snapshot.cycles);
+            setDailyLogs(cloudRes.snapshot.dailyLogs);
+            await saveSnapshot(cloudRes.snapshot, null, storageScope);
+            setCloudSyncStatus('synced');
+          } else {
+            const pushRes = await syncSnapshotToCloud(
+              { id: user.id, email: user.email },
+              localResult.snapshot
+            );
+            if (!active) return;
+            setCloudSyncStatus(pushRes.status);
+            setCloudSyncError(pushRes.error ?? null);
+          }
+        } else if (cloudRes.status === 'empty') {
+          const localHasData =
+            localResult.snapshot.settings.onboardingCompleted ||
+            localResult.snapshot.cycles.length > 0 ||
+            localResult.snapshot.dailyLogs.length > 0;
+
+          if (localHasData) {
+            const pushRes = await syncSnapshotToCloud(
+              { id: user.id, email: user.email },
+              localResult.snapshot
+            );
+            if (!active) return;
+            setCloudSyncStatus(pushRes.status);
+            setCloudSyncError(pushRes.error ?? null);
+          } else {
+            setCloudSyncStatus('synced');
+          }
+        }
       } catch (err) {
         if (!active) return;
         setStorageError(
@@ -191,15 +301,38 @@ export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
         if (active) setLoading(false);
       }
     })();
+
     return () => {
       active = false;
     };
-  }, []);
+  }, [authLoading, user, storageScope]);
+
+  const syncToCloudIfSignedIn = useCallback(
+    async (next: LumaDataSnapshot) => {
+      if (!user) return;
+      setCloudSyncStatus('syncing');
+      setCloudSyncError(null);
+      try {
+        const res = await syncSnapshotToCloud(
+          { id: user.id, email: user.email },
+          next
+        );
+        setCloudSyncStatus(res.status);
+        setCloudSyncError(res.error ?? null);
+      } catch (err) {
+        setCloudSyncStatus('error');
+        setCloudSyncError(
+          err instanceof Error ? err.message : 'Unable to sync to Supabase.'
+        );
+      }
+    },
+    [user]
+  );
 
   const persist = useCallback(
     async (next: LumaDataSnapshot) => {
       try {
-        await saveSnapshot(next, vaultSessionRef.current);
+        await saveSnapshot(next, vaultSessionRef.current, storageScope);
         setStorageError(null);
       } catch (err) {
         setStorageError(
@@ -209,8 +342,12 @@ export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
         );
         throw err;
       }
+
+      if (user) {
+        void syncToCloudIfSignedIn(next);
+      }
     },
-    []
+    [storageScope, user, syncToCloudIfSignedIn]
   );
 
   const summary = useMemo(
@@ -546,25 +683,29 @@ export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
     async (passphrase: string) => {
       const session = await enableEncryptedVault(
         { settings, cycles, dailyLogs },
-        passphrase
+        passphrase,
+        storageScope
       );
       vaultSessionRef.current = session;
       setVaultEnabled(true);
       setVaultLocked(false);
     },
-    [settings, cycles, dailyLogs]
+    [settings, cycles, dailyLogs, storageScope]
   );
 
-  const unlockVault = useCallback(async (passphrase: string) => {
-    const res = await unlockEncryptedVault(passphrase);
-    vaultSessionRef.current = res.session;
-    setSettings(res.snapshot.settings);
-    setCycles(res.snapshot.cycles);
-    setDailyLogs(res.snapshot.dailyLogs);
-    setCorruptionWarning(res.corruptionWarning);
-    setVaultEnabled(true);
-    setVaultLocked(false);
-  }, []);
+  const unlockVault = useCallback(
+    async (passphrase: string) => {
+      const res = await unlockEncryptedVault(passphrase, storageScope);
+      vaultSessionRef.current = res.session;
+      setSettings(res.snapshot.settings);
+      setCycles(res.snapshot.cycles);
+      setDailyLogs(res.snapshot.dailyLogs);
+      setCorruptionWarning(res.corruptionWarning);
+      setVaultEnabled(true);
+      setVaultLocked(false);
+    },
+    [storageScope]
+  );
 
   const lockVault = useCallback(() => {
     if (!vaultEnabled) return;
@@ -574,15 +715,18 @@ export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
     setDailyLogs([]);
   }, [vaultEnabled]);
 
-  const disableVault = useCallback(async (passphrase: string) => {
-    const snapshot = await disableEncryptedVault(passphrase);
-    vaultSessionRef.current = null;
-    setVaultEnabled(false);
-    setVaultLocked(false);
-    setSettings(snapshot.settings);
-    setCycles(snapshot.cycles);
-    setDailyLogs(snapshot.dailyLogs);
-  }, []);
+  const disableVault = useCallback(
+    async (passphrase: string) => {
+      const snapshot = await disableEncryptedVault(passphrase, storageScope);
+      vaultSessionRef.current = null;
+      setVaultEnabled(false);
+      setVaultLocked(false);
+      setSettings(snapshot.settings);
+      setCycles(snapshot.cycles);
+      setDailyLogs(snapshot.dailyLogs);
+    },
+    [storageScope]
+  );
 
   const importSnapshot = useCallback(
     async (incoming: LumaDataSnapshot, mode: 'replace' | 'merge') => {
@@ -639,7 +783,10 @@ export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const deleteAllData = useCallback(async () => {
-    await wipeAllLocalData();
+    await wipeAllLocalData(storageScope);
+    if (user) {
+      await deleteUserCloudData(user.id);
+    }
     vaultSessionRef.current = null;
     setVaultEnabled(false);
     setVaultLocked(false);
@@ -648,7 +795,32 @@ export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
     setDailyLogs([]);
     setCorruptionWarning(null);
     setStorageError(null);
-  }, []);
+  }, [storageScope, user]);
+
+  const retryCloudSync = useCallback(async () => {
+    if (!user) return;
+    setCloudSyncStatus('syncing');
+    setCloudSyncError(null);
+
+    const cloudRes = await fetchUserCloudSnapshot(user.id);
+    if (cloudRes.status === 'tables-missing') {
+      setCloudSyncStatus('tables-missing');
+      setCloudSyncError(cloudRes.error ?? null);
+      return;
+    }
+    if (cloudRes.status === 'error') {
+      setCloudSyncStatus('error');
+      setCloudSyncError(cloudRes.error ?? null);
+      return;
+    }
+
+    const res = await syncSnapshotToCloud(
+      { id: user.id, email: user.email },
+      { settings, cycles, dailyLogs }
+    );
+    setCloudSyncStatus(res.status);
+    setCloudSyncError(res.error ?? null);
+  }, [user, settings, cycles, dailyLogs]);
 
   const dismissCorruptionWarning = useCallback(() => {
     setCorruptionWarning(null);
@@ -662,6 +834,8 @@ export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
     loading,
     storageError,
     corruptionWarning,
+    cloudSyncStatus,
+    cloudSyncError,
     vaultLocked,
     vaultEnabled,
     resolvedTheme,
@@ -685,6 +859,7 @@ export const LumaProvider: React.FC<{ children: React.ReactNode }> = ({
     disableVault,
     importSnapshot,
     deleteAllData,
+    retryCloudSync,
     dismissCorruptionWarning,
     dismissReminder,
   };

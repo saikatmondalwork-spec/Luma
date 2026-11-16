@@ -2,14 +2,23 @@ import React, { useRef, useState } from 'react';
 import {
   Bell,
   CalendarPlus,
+  Check,
+  Cloud,
+  Copy,
   Download,
   Lock,
+  LogIn,
+  LogOut,
+  RefreshCw,
   ShieldCheck,
   Trash2,
   Unlock,
   Upload,
+  UserCheck,
 } from 'lucide-react';
+import { useAuth } from '@/src/context/AuthContext';
 import { useLuma } from '@/src/context/LumaContext';
+import { SUPABASE_SCHEMA_SQL } from '@/src/lib/supabaseSchema';
 import { LumaDataSnapshot, ThemeMode } from '@/src/types/luma';
 import {
   buildCsvExport,
@@ -40,11 +49,14 @@ function downloadTextFile(filename: string, content: string, mime: string) {
 }
 
 export const SettingsPage: React.FC = () => {
+  const { user, signOut, exitGuestMode } = useAuth();
   const {
     settings,
     cycles,
     dailyLogs,
     summary,
+    cloudSyncStatus,
+    cloudSyncError,
     vaultEnabled,
     updateSettings,
     enableVault,
@@ -52,7 +64,10 @@ export const SettingsPage: React.FC = () => {
     disableVault,
     importSnapshot,
     deleteAllData,
+    retryCloudSync,
   } = useLuma();
+
+  const [sqlCopied, setSqlCopied] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [notifPermission, setNotifPermission] = useState(() =>
@@ -203,6 +218,119 @@ export const SettingsPage: React.FC = () => {
           {statusMessage}
         </div>
       )}
+
+      {/* Account & Access */}
+      <section className="luma-card rounded-[28px] p-5 sm:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="w-10 h-10 rounded-xl bg-[var(--luma-plum-soft)] text-[var(--luma-plum)] flex items-center justify-center shrink-0">
+              <UserCheck className="w-5 h-5" />
+            </span>
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-[var(--luma-text)]">
+                Account &amp; Access
+              </h2>
+              <p className="text-xs sm:text-sm text-[var(--luma-muted)] mt-0.5">
+                {user?.email
+                  ? `Signed in via Supabase as ${user.email}`
+                  : 'Currently using Local Guest Mode (no account required)'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {user && (
+              <button
+                type="button"
+                onClick={() => void retryCloudSync()}
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-2xl border border-[var(--luma-border)] bg-[var(--luma-canvas)] hover:bg-[var(--luma-subtle)] text-xs sm:text-sm font-semibold text-[var(--luma-text)] whitespace-nowrap"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 text-[var(--luma-plum)] ${
+                    cloudSyncStatus === 'syncing' ? 'animate-spin' : ''
+                  }`}
+                />
+                <span>
+                  {cloudSyncStatus === 'syncing' ? 'Syncing...' : 'Sync Now'}
+                </span>
+              </button>
+            )}
+
+            {user ? (
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-2xl border border-[var(--luma-border)] bg-[var(--luma-canvas)] hover:bg-[var(--luma-subtle)] text-xs sm:text-sm font-semibold text-[var(--luma-text)] whitespace-nowrap"
+              >
+                <LogOut className="w-4 h-4 text-[var(--luma-rose-deep)]" />
+                <span>Sign Out</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={exitGuestMode}
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-2xl luma-violet-gradient text-white text-xs sm:text-sm font-semibold hover:opacity-95 whitespace-nowrap"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In / Create Account</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {user && (
+          <div className="rounded-2xl border border-[var(--luma-border)] bg-[var(--luma-canvas)] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-center gap-2 text-[var(--luma-text)] font-medium">
+              <Cloud className="w-4 h-4 text-[var(--luma-plum)] shrink-0" />
+              <span>
+                {cloudSyncStatus === 'synced'
+                  ? 'Supabase Cloud Sync is active — your cycles, symptoms, and settings restore automatically when you sign in.'
+                  : cloudSyncStatus === 'syncing'
+                  ? 'Syncing your records with Supabase...'
+                  : cloudSyncStatus === 'tables-missing'
+                  ? 'Supabase database tables not found yet. Run the SQL script in Supabase SQL Editor.'
+                  : cloudSyncError || 'Cloud sync paused — local device storage remains active.'}
+              </span>
+            </div>
+
+            {cloudSyncStatus === 'tables-missing' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL);
+                    setSqlCopied(true);
+                    window.setTimeout(() => setSqlCopied(false), 2500);
+                  } catch {
+                    setSqlCopied(false);
+                  }
+                }}
+                className="min-h-[34px] px-3 py-1 rounded-xl border border-[var(--luma-border)] bg-[var(--luma-surface)] text-xs font-semibold inline-flex items-center gap-1.5 shrink-0"
+              >
+                {sqlCopied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[#16A34A]" />
+                    <span>SQL Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-[var(--luma-plum)]" />
+                    <span>Copy SQL Setup</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
+        {!user && (
+          <p className="text-xs text-[var(--luma-muted)] leading-relaxed">
+            In Guest Mode, your cycle dates, symptoms, and journal notes remain
+            exclusively on this device. Sign in or create an account to save
+            your records to Supabase and access them across logins.
+          </p>
+        )}
+      </section>
 
       {/* Cycle & Tracking Preferences */}
       <section className="luma-card rounded-[28px] p-5 sm:p-6 space-y-6">
@@ -556,10 +684,12 @@ export const SettingsPage: React.FC = () => {
         </div>
 
         <p className="text-sm text-[var(--luma-muted)] leading-relaxed">
-          All cycle dates, symptoms, and journal entries live exclusively in
-          this browser&apos;s IndexedDB storage. Luma has no user accounts, no
-          external servers, no analytics trackers, and never puts health details
-          in URLs or console logs.
+          Your cycle dates, symptoms, and journal entries are cached in
+          per-user browser IndexedDB storage. When signed in with a Supabase
+          account, your records sync securely under your private user ID with
+          Row-Level Security so logging back in restores your personal history.
+          Luma never uses analytics trackers or puts health details in URLs or
+          console logs.
         </p>
 
         <div className="rounded-2xl border border-[var(--luma-border)] bg-[var(--luma-canvas)] p-4 space-y-3">
