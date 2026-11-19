@@ -131,7 +131,7 @@ export const OnboardingFlow: React.FC = () => {
   };
 
   return (
-    <div className="min-h-dvh bg-[var(--luma-canvas)] text-[var(--luma-text)] flex flex-col justify-center px-4 py-8 sm:py-12">
+    <div className="min-h-dvh luma-stage text-[var(--luma-text)] flex flex-col justify-center px-4 py-8 sm:py-12">
       <div className="w-full max-w-2xl mx-auto">
         <div className="flex items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">

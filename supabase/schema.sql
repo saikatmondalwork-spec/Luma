@@ -1,5 +1,5 @@
--- Luma Supabase Schema & Row-Level Security Policies
--- Run this once in your Supabase Dashboard -> SQL Editor:
+-- Luma Supabase Schema, Idempotent Sync Integrity Migration & Row-Level Security Policies
+-- Run this in your Supabase Dashboard -> SQL Editor:
 -- https://supabase.com/dashboard/project/hrallhfsbatwxiqbvfeo/sql/new
 
 -- 1. Table of users who sign up / log in
@@ -11,12 +11,16 @@ create table if not exists public.luma_users (
   updated_at timestamptz not null default now()
 );
 
--- 2. Per-user settings & cycle baseline preferences
+-- 2. Per-user settings, cycle baseline preferences & monotonic sync_revision
 create table if not exists public.luma_user_settings (
   user_id uuid primary key references public.luma_users(id) on delete cascade,
   settings jsonb not null,
+  sync_revision bigint not null default 0,
   updated_at timestamptz not null default now()
 );
+
+alter table public.luma_user_settings
+  add column if not exists sync_revision bigint not null default 0;
 
 -- 3. Per-user menstrual period / cycle records
 create table if not exists public.luma_cycles (
@@ -114,3 +118,162 @@ drop trigger if exists on_auth_user_created_luma on auth.users;
 create trigger on_auth_user_created_luma
   after insert on auth.users
   for each row execute procedure public.handle_new_luma_user();
+
+-- 5. Conflict-safe transactional sync RPC (security invoker so RLS applies)
+-- Checks expected_revision against luma_user_settings.sync_revision,
+-- applies only explicit deletions that are not newer on the server,
+-- upserts cycles and daily logs only when incoming updated_at >= existing updated_at,
+-- and atomically increments sync_revision.
+create or replace function public.luma_sync_user_data(
+  p_email text,
+  p_expected_revision bigint,
+  p_settings jsonb,
+  p_settings_updated_at timestamptz,
+  p_cycles jsonb default '[]'::jsonb,
+  p_daily_logs jsonb default '[]'::jsonb,
+  p_deleted_cycle_ids text[] default '{}'::text[],
+  p_deleted_log_ids text[] default '{}'::text[],
+  p_deleted_log_dates text[] default '{}'::text[]
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_current_revision bigint;
+  v_current_settings jsonb;
+  v_current_settings_updated_at timestamptz;
+  v_new_revision bigint;
+  v_cycle jsonb;
+  v_log jsonb;
+begin
+  if v_user_id is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  insert into public.luma_users (id, email, last_login_at, updated_at)
+  values (v_user_id, coalesce(p_email, ''), now(), now())
+  on conflict (id) do update
+    set email = coalesce(nullif(excluded.email, ''), public.luma_users.email),
+        last_login_at = now(),
+        updated_at = now();
+
+  select sync_revision, settings, updated_at
+    into v_current_revision, v_current_settings, v_current_settings_updated_at
+    from public.luma_user_settings
+   where user_id = v_user_id
+   for update;
+
+  if found then
+    if p_expected_revision is not null and v_current_revision <> p_expected_revision then
+      return jsonb_build_object(
+        'status', 'conflict',
+        'server_revision', v_current_revision
+      );
+    end if;
+
+    v_new_revision := v_current_revision + 1;
+
+    update public.luma_user_settings
+       set settings = case
+             when p_settings_updated_at >= v_current_settings_updated_at then p_settings
+             else v_current_settings
+           end,
+           updated_at = greatest(p_settings_updated_at, v_current_settings_updated_at),
+           sync_revision = v_new_revision
+     where user_id = v_user_id;
+  else
+    if p_expected_revision is not null and p_expected_revision > 0 then
+      return jsonb_build_object(
+        'status', 'conflict',
+        'server_revision', 0
+      );
+    end if;
+
+    v_new_revision := 1;
+    insert into public.luma_user_settings (user_id, settings, sync_revision, updated_at)
+    values (v_user_id, p_settings, v_new_revision, coalesce(p_settings_updated_at, now()));
+  end if;
+
+  -- Explicit cycle deletions only
+  if array_length(p_deleted_cycle_ids, 1) is not null then
+    delete from public.luma_cycles
+     where user_id = v_user_id
+       and id = any(p_deleted_cycle_ids);
+  end if;
+
+  -- Explicit daily log deletions only (by id or date)
+  if array_length(p_deleted_log_ids, 1) is not null then
+    delete from public.luma_daily_logs
+     where user_id = v_user_id
+       and id = any(p_deleted_log_ids);
+  end if;
+
+  if array_length(p_deleted_log_dates, 1) is not null then
+    delete from public.luma_daily_logs
+     where user_id = v_user_id
+       and date = any(p_deleted_log_dates);
+  end if;
+
+  -- Upsert cycles with Last-Write-Wins timestamp guard
+  for v_cycle in select * from jsonb_array_elements(coalesce(p_cycles, '[]'::jsonb))
+  loop
+    insert into public.luma_cycles (
+      user_id, id, start_date, end_date, notes, created_at, updated_at
+    )
+    values (
+      v_user_id,
+      v_cycle->>'id',
+      v_cycle->>'start_date',
+      v_cycle->>'end_date',
+      coalesce(v_cycle->>'notes', ''),
+      v_cycle->>'created_at',
+      v_cycle->>'updated_at'
+    )
+    on conflict (user_id, id) do update
+      set start_date = excluded.start_date,
+          end_date = excluded.end_date,
+          notes = excluded.notes,
+          updated_at = excluded.updated_at
+    where excluded.updated_at >= public.luma_cycles.updated_at;
+  end loop;
+
+  -- Upsert daily logs keyed on (user_id, date) with Last-Write-Wins timestamp guard
+  for v_log in select * from jsonb_array_elements(coalesce(p_daily_logs, '[]'::jsonb))
+  loop
+    insert into public.luma_daily_logs (
+      user_id, id, date, bleeding_flow, symptoms, mood, energy_level, sleep, notes, created_at, updated_at
+    )
+    values (
+      v_user_id,
+      v_log->>'id',
+      v_log->>'date',
+      v_log->>'bleeding_flow',
+      coalesce(v_log->'symptoms', '[]'::jsonb),
+      v_log->>'mood',
+      v_log->>'energy_level',
+      v_log->'sleep',
+      coalesce(v_log->>'notes', ''),
+      v_log->>'created_at',
+      v_log->>'updated_at'
+    )
+    on conflict (user_id, date) do update
+      set id = excluded.id,
+          bleeding_flow = excluded.bleeding_flow,
+          symptoms = excluded.symptoms,
+          mood = excluded.mood,
+          energy_level = excluded.energy_level,
+          sleep = excluded.sleep,
+          notes = excluded.notes,
+          updated_at = excluded.updated_at
+    where excluded.updated_at >= public.luma_daily_logs.updated_at;
+  end loop;
+
+  return jsonb_build_object(
+    'status', 'synced',
+    'server_revision', v_new_revision
+  );
+end;
+$$;

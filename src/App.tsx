@@ -67,7 +67,7 @@ const LumaWorkspace: React.FC = () => {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-dvh flex flex-col items-center justify-center gap-3 bg-[var(--luma-canvas)] text-[var(--luma-text)]">
+      <div className="min-h-dvh flex flex-col items-center justify-center gap-3 luma-stage text-[var(--luma-text)]">
         <div className="w-14 h-14 rounded-2xl luma-violet-gradient flex items-center justify-center text-white shadow-lg">
           <LumaMark size={28} />
         </div>

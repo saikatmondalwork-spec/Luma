@@ -37,10 +37,29 @@ export interface ActiveVaultSession {
   iterations: number;
 }
 
+export interface LocalSyncMetadata {
+  id: 'sync_meta';
+  lastSyncedRevision: number | null;
+  deletedCycles: Record<string, string>; // cycleId -> deletedAt ISO timestamp
+  deletedDailyLogIds: Record<string, string>; // logId -> deletedAt ISO timestamp
+  deletedDailyLogDates: Record<string, string>; // date (YYYY-MM-DD) -> deletedAt ISO timestamp
+}
+
+export function createDefaultSyncMetadata(): LocalSyncMetadata {
+  return {
+    id: 'sync_meta',
+    lastSyncedRevision: null,
+    deletedCycles: {},
+    deletedDailyLogIds: {},
+    deletedDailyLogDates: {},
+  };
+}
+
 export interface StorageLoadResult {
   locked: boolean;
   vaultExists: boolean;
   snapshot: LumaDataSnapshot;
+  syncMeta: LocalSyncMetadata;
   corruptionWarning: string | null;
 }
 
@@ -148,6 +167,69 @@ function sanitizeRecords(raw: {
   };
 }
 
+function sanitizeSyncMetadata(raw: unknown): LocalSyncMetadata {
+  if (!raw || typeof raw !== 'object') {
+    return createDefaultSyncMetadata();
+  }
+  const candidate = raw as Partial<LocalSyncMetadata>;
+  const sanitizeMap = (val: unknown): Record<string, string> => {
+    if (!val || typeof val !== 'object') return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      if (typeof k === 'string' && typeof v === 'string') {
+        out[k] = v;
+      }
+    }
+    return out;
+  };
+  return {
+    id: 'sync_meta',
+    lastSyncedRevision:
+      typeof candidate.lastSyncedRevision === 'number' &&
+      Number.isFinite(candidate.lastSyncedRevision)
+        ? candidate.lastSyncedRevision
+        : null,
+    deletedCycles: sanitizeMap(candidate.deletedCycles),
+    deletedDailyLogIds: sanitizeMap(candidate.deletedDailyLogIds),
+    deletedDailyLogDates: sanitizeMap(candidate.deletedDailyLogDates),
+  };
+}
+
+export async function loadSyncMetadata(scope = 'guest'): Promise<LocalSyncMetadata> {
+  const db = await openDatabase(scope);
+  try {
+    const raw = await getOneFromStore<LocalSyncMetadata>(
+      db,
+      STORE_SETTINGS,
+      'sync_meta'
+    );
+    return sanitizeSyncMetadata(raw);
+  } finally {
+    db.close();
+  }
+}
+
+export async function saveSyncMetadata(
+  meta: LocalSyncMetadata,
+  scope = 'guest'
+): Promise<void> {
+  const db = await openDatabase(scope);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_SETTINGS, 'readwrite');
+      tx.objectStore(STORE_SETTINGS).put({
+        ...meta,
+        id: 'sync_meta',
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () =>
+        reject(tx.error ?? new Error('Failed writing sync metadata.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
 export async function loadInitialStorage(scope = 'guest'): Promise<StorageLoadResult> {
   const db = await openDatabase(scope);
   try {
@@ -161,12 +243,14 @@ export async function loadInitialStorage(scope = 'guest'): Promise<StorageLoadRe
           cycles: [],
           dailyLogs: [],
         },
+        syncMeta: createDefaultSyncMetadata(),
         corruptionWarning: null,
       };
     }
 
-    const [settingsRow, cyclesRows, logRows] = await Promise.all([
+    const [settingsRow, syncMetaRow, cyclesRows, logRows] = await Promise.all([
       getOneFromStore<UserSettings>(db, STORE_SETTINGS, 'default'),
+      getOneFromStore<LocalSyncMetadata>(db, STORE_SETTINGS, 'sync_meta'),
       getAllFromStore<CycleRecord>(db, STORE_CYCLES),
       getAllFromStore<DailyLog>(db, STORE_LOGS),
     ]);
@@ -181,6 +265,7 @@ export async function loadInitialStorage(scope = 'guest'): Promise<StorageLoadRe
       locked: false,
       vaultExists: false,
       snapshot,
+      syncMeta: sanitizeSyncMetadata(syncMetaRow),
       corruptionWarning:
         droppedCount > 0
           ? `${droppedCount} malformed local record(s) were safely skipped during validation.`

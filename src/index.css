@@ -3,36 +3,43 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
-    /* Exact reference palette: cool periwinkle backdrop, pure white surfaces, royal violet & coral-pink */
-    --luma-backdrop: #C8D1E6;
-    --luma-canvas: #F5F7FC;
+    /* Crisp Light Mode hierarchy matching the reference UI:
+       periwinkle outer stage -> cool alabaster workspace -> pure white lifted cards -> recessed cool controls */
+    --luma-backdrop: #CBD5EC;
+    --luma-workspace: #F4F6FC;
+    --luma-canvas: #EDF1FA;
     --luma-surface: #FFFFFF;
-    --luma-subtle: #EFF2F9;
-    --luma-border: #E5E9F4;
-    --luma-text: #1E1B39;
-    --luma-muted: #7C7D9B;
+    --luma-subtle: #E5EBF7;
+    --luma-border: #D6DFEF;
+    --luma-border-soft: #E2E8F5;
+    --luma-text: #191636;
+    --luma-muted: #5B5E7E;
 
-    --luma-plum: #6554C4;
-    --luma-plum-deep: #5443B3;
-    --luma-plum-soft: #EFEBFD;
-    --luma-rose: #FF7194;
-    --luma-rose-deep: #F2557D;
-    --luma-rose-soft: #FFEAF0;
+    --luma-plum: #5C4AC2;
+    --luma-plum-deep: #4A39AD;
+    --luma-plum-soft: #ECE8FE;
+    --luma-rose: #FF6B91;
+    --luma-rose-deep: #D43662;
+    --luma-rose-soft: #FFE7EF;
     --luma-lavender: #8474DC;
-    --luma-sage: #22C55E;
-    --luma-peach: #FF9472;
+    --luma-sage: #18A957;
+    --luma-peach: #F07A54;
   }
 
   .dark {
+    color-scheme: dark;
     --luma-backdrop: #0C0B14;
+    --luma-workspace: #171628;
     --luma-canvas: #131221;
     --luma-surface: #1B1A2E;
     --luma-subtle: #25233D;
     --luma-border: #2F2D4A;
+    --luma-border-soft: #2F2D4A;
     --luma-text: #F4F3FA;
     --luma-muted: #A1A0C0;
 
@@ -49,7 +56,7 @@
 
   html {
     font-family: var(--font-sans);
-    background-color: var(--luma-canvas);
+    background-color: var(--luma-workspace);
     color: var(--luma-text);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -63,7 +70,7 @@
   body {
     margin: 0;
     min-height: 100dvh;
-    background-color: var(--luma-canvas);
+    background-color: var(--luma-workspace);
     color: var(--luma-text);
     overflow-x: hidden;
   }
@@ -102,13 +109,40 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+.luma-stage {
+  background-color: var(--luma-workspace);
+}
+
+@media (min-width: 768px) {
+  .luma-stage {
+    background: radial-gradient(
+      circle at 16% 12%,
+      #E2E8F7 0%,
+      #CFD8ED 54%,
+      #C2CCE5 100%
+    );
+  }
+
+  .dark .luma-stage {
+    background: radial-gradient(
+      circle at 16% 12%,
+      #171528 0%,
+      #0E0D18 58%,
+      #0A0912 100%
+    );
+  }
+}
+
 .luma-card {
   background-color: var(--luma-surface);
-  border: 1px solid var(--luma-border);
-  box-shadow: 0 10px 30px -10px rgba(74, 59, 158, 0.08);
+  border: 1px solid var(--luma-border-soft);
+  box-shadow:
+    0 14px 32px -14px rgba(74, 59, 158, 0.14),
+    0 2px 6px -1px rgba(25, 22, 54, 0.05);
 }
 
 .dark .luma-card {
+  border-color: var(--luma-border);
   box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.45);
 }
 

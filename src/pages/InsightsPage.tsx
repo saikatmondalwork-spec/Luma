@@ -110,6 +110,13 @@ export const InsightsPage: React.FC<InsightsPageProps> = ({
     fontSize: '12px',
     boxShadow: '0 10px 24px -8px rgba(74, 59, 158, 0.16)',
   };
+  const tooltipLabelStyle = {
+    color: 'var(--luma-text)',
+    fontWeight: 600,
+  };
+  const tooltipItemStyle = {
+    color: 'var(--luma-muted)',
+  };
 
   return (
     <div className="space-y-8">
@@ -276,6 +283,8 @@ export const InsightsPage: React.FC<InsightsPageProps> = ({
                   />
                   <Tooltip
                     contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
                     formatter={(val) => [`${val} days`, 'Cycle length']}
                   />
                   <ReferenceLine
@@ -288,7 +297,7 @@ export const InsightsPage: React.FC<InsightsPageProps> = ({
                     dataKey="days"
                     stroke="var(--luma-plum)"
                     strokeWidth={3}
-                    dot={{ r: 5, fill: 'var(--luma-rose)', stroke: '#fff', strokeWidth: 2 }}
+                    dot={{ r: 5, fill: 'var(--luma-rose)', stroke: 'var(--luma-surface)', strokeWidth: 2 }}
                     activeDot={{ r: 7 }}
                   />
                 </LineChart>
@@ -339,6 +348,8 @@ export const InsightsPage: React.FC<InsightsPageProps> = ({
                   />
                   <Tooltip
                     contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
                     formatter={(val) => [`${val} days`, 'Period length']}
                   />
                   <Bar
@@ -399,6 +410,8 @@ export const InsightsPage: React.FC<InsightsPageProps> = ({
                   />
                   <Tooltip
                     contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
                     formatter={(val) => [`${val} day(s)`, 'Logged']}
                   />
                   <Bar
@@ -460,6 +473,8 @@ export const InsightsPage: React.FC<InsightsPageProps> = ({
                       />
                       <Tooltip
                         contentStyle={tooltipStyle}
+                        labelStyle={tooltipLabelStyle}
+                        itemStyle={tooltipItemStyle}
                         formatter={(val) => [`${val} day(s)`, 'Mood']}
                       />
                       <Bar
@@ -495,6 +510,8 @@ export const InsightsPage: React.FC<InsightsPageProps> = ({
                       />
                       <Tooltip
                         contentStyle={tooltipStyle}
+                        labelStyle={tooltipLabelStyle}
+                        itemStyle={tooltipItemStyle}
                         formatter={(val) => [`${val} / 5`, 'Energy']}
                       />
                       <Line

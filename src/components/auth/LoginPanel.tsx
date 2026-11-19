@@ -82,8 +82,8 @@ export const LoginPanel: React.FC = () => {
   };
 
   return (
-    <div className="min-h-dvh bg-[var(--luma-canvas)] text-[var(--luma-text)] flex items-center justify-center px-4 py-8 sm:py-12">
-      <div className="w-full max-w-4xl rounded-[32px] bg-[var(--luma-surface)] border border-[var(--luma-border)] shadow-[0_24px_60px_-20px_rgba(78,61,174,0.18)] overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+    <div className="min-h-dvh luma-stage text-[var(--luma-text)] flex items-center justify-center px-4 py-8 sm:py-12">
+      <div className="w-full max-w-4xl rounded-[32px] bg-[var(--luma-surface)] border border-white/85 dark:border-[var(--luma-border)] md:ring-[6px] md:ring-white/40 dark:md:ring-0 shadow-[0_28px_70px_-20px_rgba(45,38,108,0.22)] dark:shadow-[0_24px_60px_-20px_rgba(0,0,0,0.6)] overflow-hidden grid grid-cols-1 lg:grid-cols-12">
         {/* Left Violet Brand & Privacy Panel */}
         <div className="lg:col-span-5 luma-violet-gradient text-white p-7 sm:p-9 flex flex-col justify-between relative overflow-hidden">
           <svg

@@ -686,8 +686,8 @@ export const HomePage: React.FC<HomePageProps> = ({
         )}
       </div>
 
-      {/* Right Docked Panel (matching Friends + Live Map sidebar in reference) */}
-      <aside className="xl:col-span-4 space-y-6 xl:border-l xl:border-[var(--luma-border)] xl:pl-6">
+      {/* Right Docked Panel (matching Friends + Live Map white panel in reference) */}
+      <aside className="xl:col-span-4 luma-card rounded-[28px] p-5 sm:p-6 space-y-6">
         {/* Recent Check-ins / Periods List */}
         <div>
           <div className="flex items-center justify-between gap-2 mb-4">
@@ -736,7 +736,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
           {rightTab === 'logs' ? (
             recentLogs.length === 0 ? (
-              <div className="rounded-2xl bg-[var(--luma-subtle)]/70 p-4 text-center space-y-2.5">
+              <div className="rounded-2xl bg-[var(--luma-workspace)] border border-[var(--luma-border-soft)] p-4 text-center space-y-2.5">
                 <p className="text-xs text-[var(--luma-muted)]">
                   No daily check-ins yet. Log mood, symptoms, or private notes.
                 </p>
@@ -798,7 +798,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               </ul>
             )
           ) : recentCycles.length === 0 ? (
-            <div className="rounded-2xl bg-[var(--luma-subtle)]/70 p-4 text-center space-y-2.5">
+            <div className="rounded-2xl bg-[var(--luma-workspace)] border border-[var(--luma-border-soft)] p-4 text-center space-y-2.5">
               <p className="text-xs text-[var(--luma-muted)]">
                 No periods recorded yet.
               </p>
@@ -874,7 +874,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             </button>
           </div>
 
-          <div className="rounded-[24px] bg-[var(--luma-subtle)]/75 border border-[var(--luma-border)] p-4 flex flex-col items-center">
+          <div className="rounded-[24px] bg-[var(--luma-workspace)] border border-[var(--luma-border-soft)] p-4 flex flex-col items-center">
             <CycleRing summary={summary} compact />
             <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-[var(--luma-muted)]">
               <span className="inline-flex items-center gap-1">

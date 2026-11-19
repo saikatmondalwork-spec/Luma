@@ -1,14 +1,18 @@
 import React, { useRef, useState } from 'react';
 import {
   Bell,
+  CalendarDays,
   CalendarPlus,
   Check,
   Cloud,
   Copy,
   Download,
+  Droplets,
   Lock,
   LogIn,
   LogOut,
+  Minus,
+  Plus,
   RefreshCw,
   ShieldCheck,
   Trash2,
@@ -203,6 +207,15 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const cycleFillPct = Math.min(
+    100,
+    Math.max(0, ((settings.averageCycleLength - 18) / (60 - 18)) * 100)
+  );
+  const periodFillPct = Math.min(
+    100,
+    Math.max(0, ((settings.averagePeriodLength - 1) / (14 - 1)) * 100)
+  );
+
   return (
     <div className="space-y-6 max-w-3xl">
       <p className="text-sm text-[var(--luma-muted)]">
@@ -287,6 +300,9 @@ export const SettingsPage: React.FC = () => {
                   ? 'Supabase Cloud Sync is active — your cycles, symptoms, and settings restore automatically when you sign in.'
                   : cloudSyncStatus === 'syncing'
                   ? 'Syncing your records with Supabase...'
+                  : cloudSyncStatus === 'conflict'
+                  ? cloudSyncError ||
+                    'Concurrent updates from another tab or device were merged locally without data loss. Click Sync Now to finalize.'
                   : cloudSyncStatus === 'tables-missing'
                   ? 'Supabase database tables not found yet. Run the SQL script in Supabase SQL Editor.'
                   : cloudSyncError || 'Cloud sync paused — local device storage remains active.'}
@@ -339,60 +355,205 @@ export const SettingsPage: React.FC = () => {
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="rounded-2xl border border-[var(--luma-border)] bg-[var(--luma-canvas)] p-4">
-            <div className="flex items-baseline justify-between gap-2">
+          <div className="rounded-[24px] border border-[var(--luma-border)] bg-[var(--luma-canvas)] px-5 pb-5 pt-9 relative mt-5 flex flex-col justify-between shadow-[0_10px_26px_-12px_rgba(74,59,158,0.14)] dark:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.45)]">
+            <div className="w-12 h-12 rounded-2xl luma-violet-gradient text-white flex items-center justify-center shadow-[0_10px_20px_-6px_rgba(88,71,184,0.45)] absolute -top-5 left-1/2 -translate-x-1/2">
+              <CalendarDays className="w-5 h-5" />
+            </div>
+
+            <div className="text-center">
               <label
                 htmlFor="settings-cycle-len"
-                className="text-sm font-semibold text-[var(--luma-text)]"
+                className="block text-base font-bold text-[var(--luma-text)] cursor-pointer"
               >
                 Baseline cycle length
               </label>
-              <span className="text-lg font-bold text-[var(--luma-plum)] tabular-nums">
+              <p className="mt-1 text-xs text-[var(--luma-muted)] leading-relaxed">
+                Used when fewer than 2 historical cycles are recorded.
+              </p>
+            </div>
+
+            <div className="mt-5">
+              <div className="flex items-center justify-between text-xs font-medium mb-2">
+                <span className="text-[var(--luma-muted)]">Target length</span>
+                <span className="font-semibold text-[var(--luma-plum)] tabular-nums">
+                  {settings.averageCycleLength}d
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  aria-label="Decrease baseline cycle length"
+                  disabled={settings.averageCycleLength <= 18}
+                  onClick={() =>
+                    updateSettings({
+                      averageCycleLength: Math.max(
+                        18,
+                        settings.averageCycleLength - 1
+                      ),
+                    })
+                  }
+                  className="w-8 h-8 rounded-xl border border-[var(--luma-border)] bg-[var(--luma-surface)] hover:bg-[var(--luma-subtle)] text-[var(--luma-text)] flex items-center justify-center shrink-0 transition-colors disabled:opacity-40"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+
+                <div className="relative h-7 flex-1 flex items-center">
+                  <input
+                    id="settings-cycle-len"
+                    type="range"
+                    min={18}
+                    max={60}
+                    value={settings.averageCycleLength}
+                    onChange={(e) =>
+                      updateSettings({
+                        averageCycleLength: Number(e.target.value),
+                      })
+                    }
+                    className="peer absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 m-0"
+                  />
+                  <div className="h-2 w-full rounded-full bg-[var(--luma-surface)] dark:bg-[var(--luma-subtle)] border border-[var(--luma-border)]/70 overflow-hidden peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--luma-plum)] peer-focus-visible:ring-offset-2">
+                    <div
+                      className="h-full rounded-full luma-violet-gradient transition-[width] duration-75"
+                      style={{ width: `${cycleFillPct}%` }}
+                    />
+                  </div>
+                  <div className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2">
+                    <span
+                      className="block w-4 h-4 -translate-x-1/2 rounded-full bg-white border-[3px] border-[var(--luma-plum)] shadow-[0_2px_8px_rgba(88,71,184,0.35)] transition-[left] duration-75 relative"
+                      style={{ left: `${cycleFillPct}%` }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Increase baseline cycle length"
+                  disabled={settings.averageCycleLength >= 60}
+                  onClick={() =>
+                    updateSettings({
+                      averageCycleLength: Math.min(
+                        60,
+                        settings.averageCycleLength + 1
+                      ),
+                    })
+                  }
+                  className="w-8 h-8 rounded-xl border border-[var(--luma-border)] bg-[var(--luma-surface)] hover:bg-[var(--luma-subtle)] text-[var(--luma-text)] flex items-center justify-center shrink-0 transition-colors disabled:opacity-40"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3.5 border-t border-[var(--luma-border)]/70 flex items-center justify-between gap-2">
+              <span className="text-xs text-[var(--luma-muted)] tabular-nums">
+                18 – 60 days
+              </span>
+              <span className="px-3 py-1 rounded-full bg-[var(--luma-plum-soft)] text-[var(--luma-plum)] text-xs font-bold tabular-nums whitespace-nowrap">
                 {settings.averageCycleLength} days
               </span>
             </div>
-            <input
-              id="settings-cycle-len"
-              type="range"
-              min={18}
-              max={60}
-              value={settings.averageCycleLength}
-              onChange={(e) =>
-                updateSettings({ averageCycleLength: Number(e.target.value) })
-              }
-              className="w-full mt-3 accent-[var(--luma-plum)]"
-            />
-            <p className="mt-1.5 text-xs text-[var(--luma-muted)]">
-              Used when fewer than 2 historical cycles are recorded.
-            </p>
           </div>
 
-          <div className="rounded-2xl border border-[var(--luma-border)] bg-[var(--luma-canvas)] p-4">
-            <div className="flex items-baseline justify-between gap-2">
+          <div className="rounded-[24px] border border-[var(--luma-border)] bg-[var(--luma-canvas)] px-5 pb-5 pt-9 relative mt-5 flex flex-col justify-between shadow-[0_10px_26px_-12px_rgba(242,85,125,0.14)] dark:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.45)]">
+            <div className="w-12 h-12 rounded-2xl luma-pink-gradient text-white flex items-center justify-center shadow-[0_10px_20px_-6px_rgba(242,85,125,0.45)] absolute -top-5 left-1/2 -translate-x-1/2">
+              <Droplets className="w-5 h-5" />
+            </div>
+
+            <div className="text-center">
               <label
                 htmlFor="settings-period-len"
-                className="text-sm font-semibold text-[var(--luma-text)]"
+                className="block text-base font-bold text-[var(--luma-text)] cursor-pointer"
               >
                 Baseline period duration
               </label>
-              <span className="text-lg font-bold text-[var(--luma-rose-deep)] tabular-nums">
-                {settings.averagePeriodLength} days
+              <p className="mt-1 text-xs text-[var(--luma-muted)] leading-relaxed">
+                Used for estimated upcoming period windows.
+              </p>
+            </div>
+
+            <div className="mt-5">
+              <div className="flex items-center justify-between text-xs font-medium mb-2">
+                <span className="text-[var(--luma-muted)]">Window length</span>
+                <span className="font-semibold text-[var(--luma-rose-deep)] tabular-nums">
+                  {settings.averagePeriodLength}d
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  aria-label="Decrease baseline period duration"
+                  disabled={settings.averagePeriodLength <= 1}
+                  onClick={() =>
+                    updateSettings({
+                      averagePeriodLength: Math.max(
+                        1,
+                        settings.averagePeriodLength - 1
+                      ),
+                    })
+                  }
+                  className="w-8 h-8 rounded-xl border border-[var(--luma-border)] bg-[var(--luma-surface)] hover:bg-[var(--luma-subtle)] text-[var(--luma-text)] flex items-center justify-center shrink-0 transition-colors disabled:opacity-40"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+
+                <div className="relative h-7 flex-1 flex items-center">
+                  <input
+                    id="settings-period-len"
+                    type="range"
+                    min={1}
+                    max={14}
+                    value={settings.averagePeriodLength}
+                    onChange={(e) =>
+                      updateSettings({
+                        averagePeriodLength: Number(e.target.value),
+                      })
+                    }
+                    className="peer absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 m-0"
+                  />
+                  <div className="h-2 w-full rounded-full bg-[var(--luma-surface)] dark:bg-[var(--luma-subtle)] border border-[var(--luma-border)]/70 overflow-hidden peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--luma-rose-deep)] peer-focus-visible:ring-offset-2">
+                    <div
+                      className="h-full rounded-full luma-pink-gradient transition-[width] duration-75"
+                      style={{ width: `${periodFillPct}%` }}
+                    />
+                  </div>
+                  <div className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2">
+                    <span
+                      className="block w-4 h-4 -translate-x-1/2 rounded-full bg-white border-[3px] border-[var(--luma-rose-deep)] shadow-[0_2px_8px_rgba(242,85,125,0.35)] transition-[left] duration-75 relative"
+                      style={{ left: `${periodFillPct}%` }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Increase baseline period duration"
+                  disabled={settings.averagePeriodLength >= 14}
+                  onClick={() =>
+                    updateSettings({
+                      averagePeriodLength: Math.min(
+                        14,
+                        settings.averagePeriodLength + 1
+                      ),
+                    })
+                  }
+                  className="w-8 h-8 rounded-xl border border-[var(--luma-border)] bg-[var(--luma-surface)] hover:bg-[var(--luma-subtle)] text-[var(--luma-text)] flex items-center justify-center shrink-0 transition-colors disabled:opacity-40"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3.5 border-t border-[var(--luma-border)]/70 flex items-center justify-between gap-2">
+              <span className="text-xs text-[var(--luma-muted)] tabular-nums">
+                1 – 14 days
+              </span>
+              <span className="px-3 py-1 rounded-full bg-[var(--luma-rose-soft)] text-[var(--luma-rose-deep)] text-xs font-bold tabular-nums whitespace-nowrap">
+                {settings.averagePeriodLength}{' '}
+                {settings.averagePeriodLength === 1 ? 'day' : 'days'}
               </span>
             </div>
-            <input
-              id="settings-period-len"
-              type="range"
-              min={1}
-              max={14}
-              value={settings.averagePeriodLength}
-              onChange={(e) =>
-                updateSettings({ averagePeriodLength: Number(e.target.value) })
-              }
-              className="w-full mt-3 accent-[var(--luma-rose)]"
-            />
-            <p className="mt-1.5 text-xs text-[var(--luma-muted)]">
-              Used for estimated upcoming period windows.
-            </p>
           </div>
         </div>
 

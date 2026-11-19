@@ -33,7 +33,7 @@ export const VaultLockScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-dvh flex items-center justify-center px-4 py-10 bg-[var(--luma-canvas)] text-[var(--luma-text)]">
+    <div className="min-h-dvh flex items-center justify-center px-4 py-10 luma-stage text-[var(--luma-text)]">
       <div className="w-full max-w-md luma-card rounded-[28px] p-6 sm:p-8">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl luma-violet-gradient text-white flex items-center justify-center shadow-md">

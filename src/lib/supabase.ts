@@ -1,15 +1,36 @@
 import { createClient } from '@supabase/supabase-js';
 
-const DEFAULT_SUPABASE_URL = 'https://hrallhfsbatwxiqbvfeo.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'sb_publishable_4W5yZddIS2226JESRqs6xA_nrubHb9S';
+export const DEFAULT_SUPABASE_URL = 'https://hrallhfsbatwxiqbvfeo.supabase.co';
+export const DEFAULT_SUPABASE_KEY = 'sb_publishable_4W5yZddIS2226JESRqs6xA_nrubHb9S';
 
-const supabaseUrl =
-  (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ||
-  DEFAULT_SUPABASE_URL;
+export function resolveSupabaseUrl(raw: unknown): string {
+  if (typeof raw !== 'string') return DEFAULT_SUPABASE_URL;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.startsWith('MY_')) return DEFAULT_SUPABASE_URL;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return trimmed;
+    }
+  } catch {
+    // Fall back to default URL below
+  }
+  return DEFAULT_SUPABASE_URL;
+}
 
-const supabasePublishableKey =
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ||
-  DEFAULT_SUPABASE_KEY;
+export function resolveSupabaseKey(raw: unknown): string {
+  if (typeof raw !== 'string') return DEFAULT_SUPABASE_KEY;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.startsWith('MY_') || trimmed.length < 20) {
+    return DEFAULT_SUPABASE_KEY;
+  }
+  return trimmed;
+}
+
+const supabaseUrl = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
+const supabasePublishableKey = resolveSupabaseKey(
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+);
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {

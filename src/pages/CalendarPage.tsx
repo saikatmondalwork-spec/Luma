@@ -153,16 +153,16 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
               const dayNum = Number(ymd.slice(8, 10));
 
               let cellSurface =
-                'bg-[var(--luma-canvas)]/60 hover:bg-[var(--luma-subtle)] border-transparent';
+                'bg-[var(--luma-workspace)] hover:bg-[var(--luma-subtle)] border-[var(--luma-border-soft)]';
               if (info.kind === 'recorded-period') {
                 cellSurface =
-                  'bg-[var(--luma-rose-soft)] border-[#F4BAC9] dark:border-[#6E3446]';
+                  'bg-[var(--luma-rose-soft)] border-[#F0A8BC] dark:border-[#6E3446]';
               } else if (info.kind === 'estimated-period') {
                 cellSurface =
-                  'bg-[var(--luma-plum-soft)]/70 border-dashed border-[var(--luma-lavender)]';
+                  'bg-[var(--luma-plum-soft)]/80 border-dashed border-[var(--luma-lavender)]';
               } else if (info.kind === 'fertile-estimate') {
                 cellSurface =
-                  'bg-[#E7F8EE] dark:bg-[#1A3527] border-[#B4E7C9] dark:border-[#2C5B42]';
+                  'bg-[#E6F7EE] dark:bg-[#1A3527] border-[#A7E2C2] dark:border-[#2C5B42]';
               }
 
               const ariaTags = [
@@ -240,7 +240,7 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
 
           <div className="mt-5 pt-4 border-t border-[var(--luma-border)] flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--luma-muted)]">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-md bg-[var(--luma-rose-soft)] border border-[#F4BAC9]" />
+              <span className="w-3 h-3 rounded-md bg-[var(--luma-rose-soft)] border border-[#F0A8BC] dark:border-[#6E3446]" />
               <span>Recorded period</span>
             </span>
             <span className="inline-flex items-center gap-1.5">
@@ -257,7 +257,7 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
             </span>
             {summary.prediction.fertileWindow && (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-md bg-[#E7F8EE] border border-[#B4E7C9]" />
+                <span className="w-3 h-3 rounded-md bg-[#E6F7EE] dark:bg-[#1A3527] border border-[#A7E2C2] dark:border-[#2C5B42]" />
                 <span>Fertile window (est.)</span>
               </span>
             )}
